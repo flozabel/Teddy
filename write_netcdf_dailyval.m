@@ -12,8 +12,8 @@ data=single(data);
 data=permute(data,[2 1 3 4]);
 
 %additional information for header
-institution=['Ludwig-Maximilians-University Munich (LMU), Dept. of Geography'];
-contact=['Florian Zabel, f.zabel@lmu.de'];
+institution=['University of Basel, Deptartment of Environmental Sciences'];
+contact=['Florian Zabel, florian.zabel@unibas.ch'];
 
 creation_time=date;
 timesteps=timestamp;

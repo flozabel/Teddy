@@ -118,6 +118,6 @@ var_name='prad';
 var_name_long='potential hourly incoming shortwave radiation';
 unit_ncdf=['W m-2'];
 time_unit=['day of year (doy) [1-366], with leap day at doy 60'];
-comment=['Calculated by Florian Zabel, Ludwig-Maximilians-University Munich (LMU)'];
+comment=['Calculated by Florian Zabel, University of Basel, Switzerland'];
 filename=['potential_radiation'];
 write_netcdf_potrad(potRadAll,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf

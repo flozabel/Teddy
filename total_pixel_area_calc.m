@@ -13,8 +13,7 @@ for row=1:360
   
   radius_a=6378.1370000;  %GRS80, WGS84 Äquatorradius [km]
   radius_p=6356.7523140;  %GRS80, WGS84 Polradius [km]   
-  radius=(radius_a*cosd(lat)+radius_p*(1-cosd(lat)));
-  
+  radius=(radius_a*cosd(lat)+radius_p*(1-cosd(lat)));  
   
   pixel_area_km(row)=((2*pi*radius)/(360/resolution)*cosd(lat))*((2*pi*radius)/(360/resolution));
 

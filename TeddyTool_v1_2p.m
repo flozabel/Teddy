@@ -7,7 +7,7 @@
 % Tested with Matlab2023b
 
 %compile TeddyTool_v1_2p
-%mcc -m TeddyTool_v1_2p.m -a WFDE5Factors.m WFDE5Factors_LST.m wfde5_tiles.m leap_year.m local_solar_time.m calc_coordinates_global_land.m merge_tiles.m write_netcdf_tiles.m write_netcdf_dailyval.m parsave.m
+%mcc -m TeddyTool_v1_2p.m -a WFDE5Factors.m WFDE5Factors_LST.m wfde5_tiles.m leap_year.m local_solar_time.m calc_coordinates_global_land.m write_netcdf_tiles.m write_netcdf_dailyval.m parsave.m
 
 
 clc;
@@ -298,7 +298,7 @@ for scenarioloop=1:length(scenarios)
               if(mask(y,x)==0)
                 continue
               end
-              data_cm(n:n+zcm-1,xloop,vloop)=data(x,y,:,:);
+              data_cm(n:n+zcm-1,xloop,vloop)=data(x,y,:);
             end
             clear data
             n=n+zcm;
@@ -362,7 +362,7 @@ for scenarioloop=1:length(scenarios)
           %parpool('Threads'); %for older Matlab versions
 
           bestrank=zeros(numdays,2,length(xcol),'int16');
-          ttimesteps=size(data_cm,1);  %corrected, Florian Zabel, 27.03.2024
+          ttimesteps=size(data_cm,1);
 
           for xloop=1:length(xcol)
             if(mask(yrow_global(xloop),xcol_global(xloop))==0)
@@ -490,9 +490,10 @@ for scenarioloop=1:length(scenarios)
         %if exist mat file for tile then load
         filename=[wfde5dir,filesep,'wfde5_tiles',filesep,'wfde5_all_',num2str(upperyy),'_',num2str(loweryy),'_',num2str(leftx),'_',num2str(rightx),'.mat'];
         if(exist(filename,'file'))
+          disp(['loading WFDE5 tile from file ',filename]);
           load(filename);
         else %call function to calculate the preprocessed wfde5 tiles
-          wfde5_all=wfde5_tiles(upperyy,loweryy,leftx,rightx,tilesize,years_wfde5,startyear_wfde5,wfde5dir,parallel_cpus,mask);
+          wfde5_all=wfde5_tiles(upperyy,loweryy,leftx,rightx,years_wfde5,startyear_wfde5,wfde5dir,parallel_cpus,mask);
         end
 
         %convert wfde5 units
@@ -821,18 +822,16 @@ for scenarioloop=1:length(scenarios)
               valh=output_temp(xloop,:);
               output_temp_agg=zeros(length(xcol),length(valh)/htimestep,'single');
               val=zeros(length(valh)/htimestep,1,'single');
-              timesteps=zeros(length(valh)/htimestep,1,'single');
+              timesteps=zeros(length(valh)/htimestep,1,'double');
               counter=1;
               for nstep=1:htimestep:length(valh)
                 if(strcmpi(varname,'pr')==1)
-                  val(counter)=sum(valh(nstep:nstep+htimestep-1)); %sum for precipitation
-                  timesteps(counter)=timestepsh(nstep);
-                  counter=counter+1;
+                  val(counter,1)=sum(valh(nstep:nstep+htimestep-1)); %sum for precipitation
                 else
-                  val(counter)=mean(valh(nstep:nstep+htimestep-1)); %mean
-                  timesteps(counter,1)=timestepsh(nstep);
-                  counter=counter+1;
+                  val(counter,1)=mean(valh(nstep:nstep+htimestep-1)); %mean
                 end
+                timesteps(counter,1)=timestepsh(nstep);
+                counter=counter+1;
               end
               output_temp_agg(xloop,:)=val;
             end
@@ -848,7 +847,7 @@ for scenarioloop=1:length(scenarios)
             output_spatial(yrow(xloop),xcol(xloop),:)=output_temp(xloop,:);
           end
           disp(['writing NetCDF file for ',varname,', tile ',num2str(upperyy),'-',num2str(loweryy)]);
-          timestamp_n(:,1)=1:size(output_spatial,3);
+          timestamp_n(:,1)=0:htimestep:size(output_spatial,3)*htimestep-1;
           var_name_long=var_names_long{vloop};
           unit=units{vloop};
           time_unit=['hours since ',num2str(startyear),'-01-01, 00:00:00'];

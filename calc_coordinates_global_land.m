@@ -22,15 +22,8 @@ yrow=floor((90-lat_global)/res)+1;
 xcol=floor((180+lon_global)/res)+1;
 
 n=1;
-x=0;
-y=yrow(1);
 for m=1:length(lat_global)
-  x=x+1;
-  if(x==721)
-    x=1;
-    y=y+1;
-  end
-  if(mask(y,x)==0)
+  if(mask(yrow(m),xcol(m))==0)
     continue
   else
     lat(n)=lat_global(m);

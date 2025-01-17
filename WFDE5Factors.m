@@ -52,7 +52,7 @@ for parameterloop=1:length(parameters_out)
   parameter_wfde5=parameters_wfde5{parameterloop};
   parameter_out=parameters_out{parameterloop};
   unit_out=units_out{parameterloop};
-  
+
   factor=NaN(300,720,24,366);
   amp_prctle=NaN(300,720,4,366,'single');
   dailyval=NaN(300,720,nyears,366,'single');
@@ -60,7 +60,7 @@ for parameterloop=1:length(parameters_out)
     dailyval_min=NaN(300,720,nyears,366,'single');
     dailyval_max=NaN(300,720,nyears,366,'single');
   end
-  
+
   for doy=1:366
     disp(['DOY: ',num2str(doy)]);
     data_wfde5=NaN(360,720,24,nyears);
@@ -71,10 +71,10 @@ for parameterloop=1:length(parameters_out)
       data_wfde5_t=NaN(360,720,24,nyears);
       data_wfde5_p=NaN(360,720,24,nyears);
     end
-    
+
     n=1;
     for year=startyear:endyear
-      
+
       Month=month(doy);  %month
       DayMonth=day(doy); %day of month
       band=DayMonth*24-23;
@@ -82,14 +82,14 @@ for parameterloop=1:length(parameters_out)
         n=n+1;
         continue
       end
-      
+
       data=NaN(300,720,24);
-      
+
       cdir=[path_wfde5,filesep,parameter_wfde5,filesep];
       filelist = dir([cdir,'*_',num2str(year),num2str(Month,'%.2i'),'*.nc']);
       filename=[filelist.name];
       filename=filename(1:length(filename)-3);
-      
+
       disp(['read WFDE5 file ',filename,' for DOY ',num2str(doy)]);
       finfo = ncinfo([cdir,filename,'.nc']);
       varname=finfo.Variables(1,4).Name;
@@ -105,10 +105,10 @@ for parameterloop=1:length(parameters_out)
       year_nc=str2double(datestr(times(band),'yyyy'));
       month_nc=str2double(datestr(times(band),'mm'));
       day_nc=str2double(datestr(times(band),'dd'));
-      
+
       %read netcdf file for doy
       data_wfde5(:,:,:,n)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band],[x y 24]));
-      
+
       if(strcmpi(parameter_out,'pr')==1)
         filename=strrep(filename,'Rainf','Snowf');
         cdir=strrep(cdir,'Rainf','Snowf');
@@ -118,7 +118,7 @@ for parameterloop=1:length(parameters_out)
         data_wfde5_snowf=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band],[x y 24]));
         data_wfde5(:,:,:,n)=data_wfde5(:,:,:,n)+data_wfde5_snowf;
       end
-      
+
       if(strcmpi(parameter_out,'hurs')==1)
         filename=strrep(filename,'Qair','Tair');
         cdir=strrep(cdir,'Qair','Tair');
@@ -126,7 +126,7 @@ for parameterloop=1:length(parameters_out)
         finfo = ncinfo([cdir,filename,'.nc']);
         varname=finfo.Variables(1,4).Name;
         data_wfde5_t(:,:,:,n)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band],[x y 24]));
-        
+
         filename=strrep(filename,'Tair','PSurf');
         cdir=strrep(cdir,'Tair','PSurf');
         disp(['read WFDE5 file ',filename,' for DOY ',num2str(doy)]);
@@ -134,10 +134,10 @@ for parameterloop=1:length(parameters_out)
         varname=finfo.Variables(1,4).Name;
         data_wfde5_p(:,:,:,n)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band],[x y 24]));
       end
-      
+
       n=n+1;
     end %year
-    
+
     %convert units
     if strcmpi(parameter_out,'ps')==1
       data_wfde5=data_wfde5/100;   %convert surface pressure [Pa] to [hPa]
@@ -169,12 +169,12 @@ for parameterloop=1:length(parameters_out)
       rh(rh<0)=0;
       data_wfde5=rh;
     end
-    
+
     %reduce noice for solar radiation
     if(strcmpi(parameter_out,'rsds')==1)
       data_wfde5(data_wfde5<0.1)=0;
     end
-    
+
     %calculate daily mean/sum values for climate analogue fingerprint method
     if(strcmpi(parameter_out,'pr')==1)
       dailyval(:,:,:,doy)=squeeze(sum(data_wfde5(1:300,:,:,:),3,'omitnan'));
@@ -185,15 +185,15 @@ for parameterloop=1:length(parameters_out)
     else
       dailyval(:,:,:,doy)=squeeze(mean(data_wfde5(1:300,:,:,:),3,'omitnan'));
     end
-    
+
     clear('data_wfde5','data','data_compound','data_wfde5_snowf','data_wfde5_t','data_wfde5_p');
-    
+
   end %doy
-  
+
   if(~exist(outdir))
     mkdir(outdir)
   end
-  
+
   %write daily sum/mean
   load('lat');
   lat(301:360)=[];
@@ -213,7 +213,7 @@ for parameterloop=1:length(parameters_out)
   end
   write_netcdf_dailyval(dailyval,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
   clear('dailyval');
-  
+
   %write daily max/min for tas
   if(strcmpi(parameter_out,'tas')==1)
     var_name='min';
@@ -228,7 +228,7 @@ for parameterloop=1:length(parameters_out)
     write_netcdf_dailyval(dailyval_max,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
     clear('dailyval_min','dailyval_max');
   end
-  
+
 end %parameter
 
 end
