@@ -818,9 +818,9 @@ for scenarioloop=1:length(scenarios)
 
           %aggregate hourly to n-hourly
           if(htimestep>1)
+            output_temp_agg=zeros(length(xcol),size(output_temp,2)/htimestep,'single');
             for xloop=1:length(xcol)
               valh=output_temp(xloop,:);
-              output_temp_agg=zeros(length(xcol),length(valh)/htimestep,'single');
               val=zeros(length(valh)/htimestep,1,'single');
               timesteps=zeros(length(valh)/htimestep,1,'double');
               counter=1;
