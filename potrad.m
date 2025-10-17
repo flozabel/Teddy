@@ -6,7 +6,7 @@ clear
 
 %calculate aspect and slope from terrain
 %read wfde5 terrain
-filename='F:\TeddyTool\WFDE5_v2p1\dgm\ASurf_WFDE5_CRU_v2.1.nc';
+filename=['..',filesep,'WFDE5_v2p1',filesep,'dgm',filesep,'ASurf_WFDE5_CRU_v2.1.nc'];
 varname='ASurf';
 dgm=rot90(ncread(filename,varname,[1 1],[720 360]));
 

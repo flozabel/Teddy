@@ -2,7 +2,7 @@
 % The Teddy-Tool disaggregates daily climate model data to hourly values for climate impact and attribution studies
 % Changes in v1.1p: Parallel processing of samples
 % Changes in v1.2p: Optimization, partitioning into tiles, spatial output
-% By Florian Zabel, University of Basel, Switzerland (2024)
+% By Florian Zabel, University of Basel, Switzerland (2025)
 % Contact: florian.zabel@unibas.ch
 % Tested with Matlab2023b
 
@@ -23,7 +23,7 @@ disp('TEDDY')
 disp('Temporal Disaggregation of Daily Climate Model Data')
 disp('Version 1.2p')
 disp(newline)
-disp('by Florian Zabel (2024)')
+disp('by Florian Zabel (2025)')
 disp('University of Basel')
 disp('contact: florian.zabel@unibas.ch')
 disp('------------------------------------------------')
@@ -136,6 +136,10 @@ for scenarioloop=1:length(scenarios)
 
         [lat,lon,lat_all,lon_all]=calc_coordinates_global_land(upperyy,loweryy,leftx,rightx,res,mask); %added Florian Zabel, 27.03.2024
 
+        if(isempty(lat))
+          continue %added FZ, 07.10.2025
+        end
+
         %convert lat/lon to global row,col
         yrow_global=floor((90-lat)/res)+1;
         xcol_global=floor((180+lon)/res)+1;
@@ -146,8 +150,8 @@ for scenarioloop=1:length(scenarios)
         xcol=floor((-leftx+lon)/res)+1;
 
         %check if tile has already been calculated
-        crosscheck=zeros(length(parameters_wfde5_factors),1);
-        for varloop=1:length(parameters_wfde5_factors)
+        crosscheck=zeros(length(parameters_isimip),1);  %changed FZ 02.10.2025: parameters_wfde5_factors to parameters_isimip
+        for varloop=1:length(parameters_isimip)         %changed FZ 02.10.2025: parameters_wfde5_factors to parameters_isimip
           varname=parameters_isimip{varloop};
           filename=[aoutdir,varname,'_',model,'_',scenario,'_',num2str(startyear),'-',num2str(endyear),'.nc4'];
           %read lat for nc4 file
@@ -158,7 +162,7 @@ for scenarioloop=1:length(scenarios)
             end
           end
         end
-        if(sum(crosscheck)==length(parameters_wfde5_factors))
+        if(sum(crosscheck)==length(parameters_isimip))   %changed FZ 02.10.2025: parameters_wfde5_factors to parameters_isimip
           disp(['tile ',model,'_',num2str(upperyy),'_',num2str(loweryy),'_',num2str(leftx),'_',num2str(rightx),' already exists and is skipped']);
           continue
         end
@@ -229,7 +233,8 @@ for scenarioloop=1:length(scenarios)
           varname=char(varname);
 
           path_cm=[climdir,filesep,scenario,filesep,model];
-          filelist = dir([path_cm,filesep,model,'*',varname,'_global_daily*.nc']);
+          filelist = dir([path_cm,filesep,'*',varname,'_global_daily*.nc']);
+          filelist = filelist(~startsWith({filelist.name}, '.')); %FZ added 07.10.2025
           nofileflag=0;
           if(isempty(filelist)==1)
             disp(['ERROR: No files in folder ',path_cm]);
@@ -247,11 +252,13 @@ for scenarioloop=1:length(scenarios)
             zcm=finfo.Dimensions(1,find(strcmpi({finfo.Dimensions.Name},'time')==1)).Length;
             yearoffset=filename_cm(length(filename_cm)-11:length(filename_cm)-8);
             if(str2double(yearoffset)>endyear)
+              netcdf.close(ncid) %FZ added 06.10.2025
               continue
             end
             %Get timeoffset from netcdf file (different climate models use different time offsets)
             time_varid=netcdf.inqVarID(ncid,'time');
             time_units=netcdf.getAtt(ncid,time_varid,'units');
+            netcdf.close(ncid) %FZ added 06.10.2025
             parts=strsplit(time_units,' ');
             reference_date=parts{3};
             reference_datetime=strcat(reference_date,{' 00:00:00'});
@@ -276,8 +283,8 @@ for scenarioloop=1:length(scenarios)
             timeoffset=timeoffset+(timeread(1)-modelspec_offset);
             time_cm_read_all=timeread+timeoffset;
             time_cm_read=timeread+timeoffset;
-            time_cm_read(time_cm_read>datenum(endyear,12,31))=[];
-            time_cm_read(time_cm_read<datenum(startyear,1,1))=[];
+            time_cm_read(time_cm_read>datenum(endyear,12,31,23,59,59))=[]; %FZ changed 02.10.2025: added 23,59,59
+            time_cm_read(time_cm_read<datenum(startyear,1,1,0,0,0))=[];    %FZ changed 02.10.2025: added 0,0,0
             index=find(ismember(time_cm_read_all,time_cm_read)==1);
             if(isempty(index))
               disp(['skip ',filename_cm])
@@ -338,11 +345,14 @@ for scenarioloop=1:length(scenarios)
           end
           disp(['reading ',filename_wfde5_mean])
           ncid = netcdf.open([filename_wfde5_mean],'NOWRITE');
-          data=ncread([filename_wfde5_mean],vname,[1 1 1 1],[720 300 years_wfde5 366]);
+          %data=ncread([filename_wfde5_mean],vname,[1 1 1 1],[720 300 years_wfde5 366]); %changed FZ 07.10.2025
+          tilesizen=size(lat_all,2);
+          tileoffsetn=(90-(lat_all(1)+res/2))*(1/res);
+          data=ncread([filename_wfde5_mean],vname,[1 tileoffsetn+1 1 1],[720 tilesizen years_wfde5 366]);
           netcdf.close(ncid);
           for xloop=1:length(xcol)
             x=xcol_global(xloop);
-            y=yrow_global(xloop);
+            y=yrow_global(xloop)-tileoffsetn;
             if(mask(y,x)==0)
               continue
             end
@@ -362,15 +372,15 @@ for scenarioloop=1:length(scenarios)
           %parpool('Threads'); %for older Matlab versions
 
           bestrank=zeros(numdays,2,length(xcol),'int16');
-          ttimesteps=size(data_cm,1);
+          ttimesteps=size(data_cm,1);  %corrected, Florian Zabel, 27.03.2024
 
-          for xloop=1:length(xcol)
+          parfor xloop=1:length(xcol) %changed parfor
             if(mask(yrow_global(xloop),xcol_global(xloop))==0)
               continue
             end
             disp(['Processing sample ',num2str(xloop),' of ',num2str(length(xcol)),' to find most similar day']);
 
-            parfor t=1:ttimesteps
+            for t=1:ttimesteps %parfor
               time=time_cm(t);
               doy=day(datetime(time,'ConvertFrom','datenum'),'dayofyear');
               year=str2double(datestr(time,'yyyy'));
@@ -490,13 +500,15 @@ for scenarioloop=1:length(scenarios)
         %if exist mat file for tile then load
         filename=[wfde5dir,filesep,'wfde5_tiles',filesep,'wfde5_all_',num2str(upperyy),'_',num2str(loweryy),'_',num2str(leftx),'_',num2str(rightx),'.mat'];
         if(exist(filename,'file'))
-          disp(['loading WFDE5 tile from file ',filename]);
+          disp(['reading precompiled WFDE5 tile from file ',filename]);
           load(filename);
         else %call function to calculate the preprocessed wfde5 tiles
+          disp(['reading WFDE5 data and process tiles']);
           wfde5_all=wfde5_tiles(upperyy,loweryy,leftx,rightx,years_wfde5,startyear_wfde5,wfde5dir,parallel_cpus,mask);
         end
 
         %convert wfde5 units
+        disp(['Convert units']);
         for xloop=1:length(xcol)
           wfde5_all(:,:,xloop,5)=wfde5_all(:,:,xloop,5)/100; %convert surface pressure [Pa] to [hPa]
           wfde5_all(:,:,xloop,7)=wfde5_all(:,:,xloop,7)*3600; %convert mass flux density to [mm h-1]
@@ -526,8 +538,9 @@ for scenarioloop=1:length(scenarios)
         end
         clear wfde5_t rh a b c d es_buck e
 
-        for vloop=1:length(parameters_wfde5_factors)
-          varname=parameters_wfde5_factors{vloop};
+        disp(['Apply hourly factors for most similar meteorological day']);
+        for vloop=1:length(parameters_isimip) %FZ changed 02.10.2025: parameters_wfde5_factors to parameters_isimip
+          varname=parameters_isimip{vloop};   %FZ changed 02.10.2025: parameters_wfde5_factors to parameters_isimip
 
           if(crosscheck(vloop)==1)
             disp(['skipping ',varname,', since it already exists'])
@@ -653,7 +666,7 @@ for scenarioloop=1:length(scenarios)
                     %[myfit gof] = fit(wfde5_pr_ds,wfde5_pr_dh,f);
                     %coefficients=coeffvalues(myfit);
                     %plot(myfit,wfde5_pr_ds,wfde5_pr_dh);
-                    coefficients=polyfit(wfde5_pr_ds, wfde5_pr_dh,1); %changed 19.09.2024
+                    coefficients=polyfit(wfde5_pr_ds, wfde5_pr_dh,1); %FZ changed 19.09.2024
                     precip_duration=min(24,round(coefficients(1)*data_cm(tloop,xloop,vloop)+coefficients(2)));
                     nighttime=find(potRad==0);
                     if(precip_duration<length(nighttime))

@@ -32,6 +32,11 @@ for m=1:length(lat_global)
   end
 end
 
+if ~exist('lat','var') %FZ added 07.10.2025
+  lat=[];
+  lon=[];
+end
+
 return
 %save('coordinates_global_land.mat','lat','lon','-v7.3');
 
