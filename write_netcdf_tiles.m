@@ -11,7 +11,7 @@ data=single(data);
 data=permute(data,[2 1 3]);
 
 %additional information for header
-institution=['University of Basel, Deptartment of Environmental Sciences'];
+institution=['University of Basel, Department of Environmental Sciences'];
 contact=['Florian Zabel, florian.zabel@unibas.ch'];
 
 creation_time=date;

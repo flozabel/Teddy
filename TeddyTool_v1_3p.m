@@ -1,19 +1,25 @@
-% Teddy-Tool v1.2p: Temporal Disaggregation of Daily Climate Model Data (parallelized version)
+%-----------------------------------------------------------------------------------------------------------------------
+% Teddy-Tool v1.3p: Temporal Disaggregation of Daily Climate Model Data (parallelized version)
+%
 % The Teddy-Tool disaggregates daily climate model data to hourly values for climate impact and attribution studies
-% Changes in v1.1p: Parallel processing of samples
-% Changes in v1.2p: Optimization, partitioning into tiles, spatial output
+% Teddy v1.0      : Initial version for samples
+% Changes in v1.1p: Added parallel processing of samples
+% Changes in v1.2p: Optimization, partitioning into tiles, spatial output for global calculations
+% Changes in v1.3p: Added bounding box for regional application, minor bug fixes, increased performance
+%
 % By Florian Zabel, University of Basel, Switzerland (2025)
 % Contact: florian.zabel@unibas.ch
-% Tested with Matlab2023b
+%
+% Tested with Matlab2023b and Matlab2024b
+%-----------------------------------------------------------------------------------------------------------------------
 
 %compile TeddyTool_v1_2p
 %mcc -m TeddyTool_v1_2p.m -a WFDE5Factors.m WFDE5Factors_LST.m wfde5_tiles.m leap_year.m local_solar_time.m calc_coordinates_global_land.m write_netcdf_tiles.m write_netcdf_dailyval.m parsave.m
 
-
 clc;
 clear;
 warning off;
-%dbstop if error
+dbstop if error
 %dbclear all
 
 
@@ -21,7 +27,7 @@ disp(newline)
 disp('------------------------------------------------')
 disp('TEDDY')
 disp('Temporal Disaggregation of Daily Climate Model Data')
-disp('Version 1.2p')
+disp('Version 1.3p')
 disp(newline)
 disp('by Florian Zabel (2025)')
 disp('University of Basel')
@@ -96,7 +102,7 @@ if(tilesize>0)
   boundaries_lon=lon;
 end
 
-res=0.5; %spatial resolution
+resolution=0.5;     %spatial resolution
 parameters_isimip_read={'tas','hurs','rsds','rlds','ps','sfcwind','pr','tasmax','tasmin'}; %for method climate analogies, all variables are required
 parameters_wfde5_factors={'tas','hurs','rsds','rlds','ps','sfcwind','pr'};
 parameters_wfde5={'Tair','Qair','SWdown','LWdown','PSurf','Wind','Rainf'};
@@ -122,6 +128,11 @@ for scenarioloop=1:length(scenarios)
       for upperyy=uppery:-tilesize:lowery+tilesize
         loweryy=upperyy-tilesize;
 
+        upperyytiles=(uppery:-tilesize:lowery+tilesize);
+        if(uppery==upperyytiles(end))
+          loweryy=lowery;
+        end
+
         crosscheck=0;
         aoutdir=[outdir,filesep,model,filesep];
 
@@ -129,25 +140,31 @@ for scenarioloop=1:length(scenarios)
           mkdir([aoutdir]);
         end
 
-        %read land-sea-mask (WFDE5 Land-Sea-Mask)
+        %read global land-sea-mask (WFDE5 Land-Sea-Mask)
         disp('Reading land-sea mask');
-        mask=load('wfde5_mask.mat').mask;
+        mask_global=load('wfde5_mask.mat').mask; %mask must have same resolution than the reference and climate data
         %mask(mask==0)=1; %without mask
 
-        [lat,lon,lat_all,lon_all]=calc_coordinates_global_land(upperyy,loweryy,leftx,rightx,res,mask); %added Florian Zabel, 27.03.2024
+        %calculate coordinates, rows and cols for tile; Attention: all coordinates are central coordinates
+        [lat,lon,yrow,xcol,lat_,lon_,yrow_global,xcol_global,yrow_global_,xcol_global_]=calc_coordinates_global_land(upperyy,loweryy,leftx,rightx,resolution,mask_global);
+        %lat,lon,yrow,xcol are vectorized pixels to 1d arrays within the mask and refer to col/row numbers within the tile
+        %global refers to col/row numbers for global extent
 
         if(isempty(lat))
           continue %added FZ, 07.10.2025
         end
 
-        %convert lat/lon to global row,col
-        yrow_global=floor((90-lat)/res)+1;
-        xcol_global=floor((180+lon)/res)+1;
+        %calculate central coordintes for global extent
+        lat_global_ext=90:-resolution:-60;
+        lat_global_ext(end)=[];
+        lon_global_ext=-180:resolution:180;
+        lon_global_ext(end)=[];
+        lat_global_ext=lat_global_ext-resolution/2;
+        lon_global_ext=lon_global_ext-resolution/2;
 
-        %convert lat/lon to row,col for tile
-        res=0.5;
-        yrow=floor((upperyy-lat)/res)+1;
-        xcol=floor((-leftx+lon)/res)+1;
+        %calculate mask for the specific spatial extent
+        mask=mask_global(yrow_global_,xcol_global_);
+        %imagesc(mask);
 
         %check if tile has already been calculated
         crosscheck=zeros(length(parameters_isimip),1);  %changed FZ 02.10.2025: parameters_wfde5_factors to parameters_isimip
@@ -157,7 +174,7 @@ for scenarioloop=1:length(scenarios)
           %read lat for nc4 file
           if(exist(filename,'file'))
             validate_lat=ncread([filename],'lat');
-            if(sum(validate_lat==lat_all,'all') == numel(lat_all))
+            if(sum(validate_lat==lat_,'all') == numel(lat_))
               crosscheck(varloop)=1;
             end
           end
@@ -168,7 +185,7 @@ for scenarioloop=1:length(scenarios)
         end
 
         %calculate local solar time offset to UTC
-        lst_offsets=local_solar_time(res);
+        lst_offsets=local_solar_time(resolution);
 
         %calculate local midnight in UTC
         midnights=lst_offsets*(-1)+1;
@@ -180,8 +197,8 @@ for scenarioloop=1:length(scenarios)
         % end_date = datetime(['31-Dec-', num2str(endyear)], 'InputFormat', 'dd-MMM-yyyy');
         % numdays = days(end_date - start_date) + 1;
 
+        %read precalculated potential radiatio; Attention: must have same spatial resolution than other data
         potRadAll=zeros(366,24,length(xcol),'single');
-        %read potential radiation
         if(find(contains(parameters_isimip,'rsds','IgnoreCase',true)>=1))
           disp('Reading potential radiation');
           filename=['potential_radiation.nc4'];
@@ -189,9 +206,6 @@ for scenarioloop=1:length(scenarios)
           for xloop=1:length(xcol)
             x=xcol_global(xloop);
             y=yrow_global(xloop);
-            if(mask(y,x)==0)
-              continue
-            end
             potRadAll(:,:,xloop)=data(x,y,:,:);
           end
           clear data
@@ -212,11 +226,11 @@ for scenarioloop=1:length(scenarios)
             if isempty(CalcWFDE5FactorsFlag)
               CalcWFDE5FactorsFlag = 'y';
             end
-            if(strcmpi(CalcWFDE5FactorsFlag,'y')==1)
+            if(strcmpi(CalcWFDE5FactorsFlag,'y')==1) %calculate WFDE5Factors globally
               if(lstflag==1)
-                WFDE5Factors_LST(parameters_isimip,wfde5dir,factordir,startyear_wfde5,endyear_wfde5);
+                WFDE5Factors_LST(parameters_isimip,wfde5dir,factordir,startyear_wfde5,endyear_wfde5,lat_global_ext,lon_global_ext,resolution,global_mask,parallel_cpus);
               else
-                WFDE5Factors(parameters_isimip,wfde5dir,factordir,startyear_wfde5,endyear_wfde5);
+                WFDE5Factors(parameters_isimip,wfde5dir,factordir,startyear_wfde5,endyear_wfde5,lat_global_ext,lon_global_ext,resolution,global_mask,parallel_cpus);
               end
             else
               disp('Stopped processing due to missing subdaily factors');
@@ -298,11 +312,10 @@ for scenarioloop=1:length(scenarios)
             disp(['reading ',filename_cm]);
             %read ISIMIP climate data for lat/lon
             data=ncread([filename_cm],varname,[1 1 acm],[720 360 zcm]);
-            netcdf.close(ncid)
             for xloop=1:length(xcol)
               x=xcol_global(xloop);
               y=yrow_global(xloop);
-              if(mask(y,x)==0)
+              if(mask_global(y,x)==0)
                 continue
               end
               data_cm(n:n+zcm-1,xloop,vloop)=data(x,y,:);
@@ -346,13 +359,13 @@ for scenarioloop=1:length(scenarios)
           disp(['reading ',filename_wfde5_mean])
           ncid = netcdf.open([filename_wfde5_mean],'NOWRITE');
           %data=ncread([filename_wfde5_mean],vname,[1 1 1 1],[720 300 years_wfde5 366]); %changed FZ 07.10.2025
-          tilesizen=size(lat_all,2);
-          tileoffsetn=(90-(lat_all(1)+res/2))*(1/res);
+          tilesizen=size(lat_,2);
+          tileoffsetn=(90-lat_(1)+resolution/2)*(1/resolution); %lat_ -> central coordinates
           data=ncread([filename_wfde5_mean],vname,[1 tileoffsetn+1 1 1],[720 tilesizen years_wfde5 366]);
           netcdf.close(ncid);
           for xloop=1:length(xcol)
-            x=xcol_global(xloop);
-            y=yrow_global(xloop)-tileoffsetn;
+            x=xcol(xloop);
+            y=yrow(xloop);
             if(mask(y,x)==0)
               continue
             end
@@ -374,13 +387,13 @@ for scenarioloop=1:length(scenarios)
           bestrank=zeros(numdays,2,length(xcol),'int16');
           ttimesteps=size(data_cm,1);  %corrected, Florian Zabel, 27.03.2024
 
-          parfor xloop=1:length(xcol) %changed parfor
-            if(mask(yrow_global(xloop),xcol_global(xloop))==0)
+          for xloop=1:length(xcol)
+            if(mask(yrow(xloop),xcol(xloop))==0)
               continue
             end
             disp(['Processing sample ',num2str(xloop),' of ',num2str(length(xcol)),' to find most similar day']);
 
-            for t=1:ttimesteps %parfor
+            parfor t=1:ttimesteps
               time=time_cm(t);
               doy=day(datetime(time,'ConvertFrom','datenum'),'dayofyear');
               year=str2double(datestr(time,'yyyy'));
@@ -504,7 +517,7 @@ for scenarioloop=1:length(scenarios)
           load(filename);
         else %call function to calculate the preprocessed wfde5 tiles
           disp(['reading WFDE5 data and process tiles']);
-          wfde5_all=wfde5_tiles(upperyy,loweryy,leftx,rightx,years_wfde5,startyear_wfde5,wfde5dir,parallel_cpus,mask);
+          wfde5_all=wfde5_tiles(upperyy,loweryy,leftx,rightx,years_wfde5,startyear_wfde5,wfde5dir,parameters_wfde5,xcol_global,yrow_global,parallel_cpus);
         end
 
         %convert wfde5 units
@@ -558,7 +571,7 @@ for scenarioloop=1:length(scenarios)
           output_temp=zeros(length(xcol),length(timestepsh),'single');
           parfor xloop=1:length(xcol)
 
-            if(mask(yrow_global(xloop),xcol_global(xloop))==0)
+            if(mask(yrow(xloop),xcol(xloop))==0)
               continue
             end
 
@@ -802,7 +815,7 @@ for scenarioloop=1:length(scenarios)
                 end
                 valh(aa:bb)=valhcor;
               end
-            end
+            end%tloop
 
             valh(valh<0)=0; %set negative values to 0
 
@@ -855,7 +868,7 @@ for scenarioloop=1:length(scenarios)
           end
 
           %save data as NetCDF file and append missing tiles to existing NetCDF file, if file already exists
-          output_spatial=NaN(length(lat_all),length(lon_all),length(timesteps),'single');
+          output_spatial=NaN(length(lat_),length(lon_),length(timesteps),'single');
           for xloop=1:length(xcol)
             output_spatial(yrow(xloop),xcol(xloop),:)=output_temp(xloop,:);
           end
@@ -866,8 +879,8 @@ for scenarioloop=1:length(scenarios)
           time_unit=['hours since ',num2str(startyear),'-01-01, 00:00:00'];
           filename=[aoutdir,varname,'_',model,'_',scenario,'_',num2str(startyear),'-',num2str(endyear)];
           comment='Temporal disaggregation by using the Teddy Tool v1.2p, Zabel and Poschlod (2023): Temporal disaggregation of daily climate model data for climate impact analysis. https://doi.org/10.5194/gmd-16-5383-2023';
-          total_rows=(uppery-lowery)/res;
-          write_netcdf_tiles(output_spatial,lat_all,lon_all,timestamp_n,varname,var_name_long,unit,time_unit,filename,comment,total_rows);
+          total_rows=(uppery-lowery)/resolution;
+          write_netcdf_tiles(output_spatial,lat_,lon_,timestamp_n,varname,var_name_long,unit,time_unit,filename,comment,total_rows);
 
           clear output_spatial output_temp timesteps timestepsh
 

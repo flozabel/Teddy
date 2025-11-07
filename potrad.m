@@ -1,4 +1,4 @@
-% By Florian Zabel, University of Basel, Switzerland (2024)
+% By Florian Zabel, University of Basel, Switzerland (2025)
 % Contact: florian.zabel@unibas.ch
 
 clc
@@ -14,15 +14,16 @@ mask=dgm;
 mask(isnan(mask)==0)=1;
 mask(isnan(mask)==1)=0;
 
-lons=-179.75:0.5:179.75;
-lats=89.75:-0.5:-89.75;
+resolution=0.5;
+
+lons=-179.75:resolution:179.75;
+lats=89.75:-resolution:-89.75;
 
 cols=length(lons);
 rows=length(lats);
 
 load('total_pixel_area_0p5degree.mat');
 dgm(isnan(dgm)==1)=0;
-resolution=0.5;
 for y=1:rows
   for x=1:cols
     lat=lats(y);
@@ -74,12 +75,12 @@ for y=1:rows
   end
 end
 
-jahr=2000;
+year=2000;
 months=[31 29 31 30 31 30 31 31 30 31 30 31];
-potRadiation_1=zeros(360,720,'single');
-potRadiation_2=zeros(360,720,'single');
-potRadiation_3=zeros(360,720,'single');
-potRadAll=zeros(360,720,366,24,'single');
+potRadiation_1=zeros(rows,cols,'single');
+potRadiation_2=zeros(rows,cols,'single');
+potRadiation_3=zeros(rows,cols,'single');
+potRadAll=zeros(rows,cols,366,24,'single');
 
 doy=1;
 for monat=1:12
@@ -95,9 +96,9 @@ for monat=1:12
             continue
           end          
           %disp(['compiling potential radiation for ',num2str(tag),'.',num2str(monat),'.',num2str(jahr)]);          
-          potRadiation_1(y,x)=GetPotRad(jahr,monat,tag,stunde,20,0,lats(y),lons(x),slope(y,x),aspect(y,x));
-          potRadiation_2(y,x)=GetPotRad(jahr,monat,tag,stunde,40,0,lats(y),lons(x),slope(y,x),aspect(y,x));
-          potRadiation_3(y,x)=GetPotRad(jahr,monat,tag,stunde,60,0,lats(y),lons(x),slope(y,x),aspect(y,x));
+          potRadiation_1(y,x)=GetPotRad(year,monat,tag,stunde,20,0,lats(y),lons(x),slope(y,x),aspect(y,x));
+          potRadiation_2(y,x)=GetPotRad(year,monat,tag,stunde,40,0,lats(y),lons(x),slope(y,x),aspect(y,x));
+          potRadiation_3(y,x)=GetPotRad(year,monat,tag,stunde,60,0,lats(y),lons(x),slope(y,x),aspect(y,x));
         end
       end      
       potRadAll(:,:,doy,h)=(potRadiation_1+potRadiation_2+potRadiation_3)/3;

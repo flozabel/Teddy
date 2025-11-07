@@ -1,4 +1,4 @@
-% By Florian Zabel, University of Basel, Switzerland (2024)
+% By Florian Zabel, University of Basel, Switzerland (2025)
 % Contact: florian.zabel@unibas.ch
 
 function potRadiation=GetPotRad(jahr,monat,tag,stunde,minute,sekunde,lat,long,slope,aspect)

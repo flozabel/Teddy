@@ -1,10 +1,13 @@
 % By Florian Zabel, University of Basel, Switzerland (2024)
 % Contact: florian.zabel@unibas.ch
 
-function WFDE5Factors_LST(parameters_out,path_wfde5,outdir,startyear,endyear)
+function WFDE5Factors_LST(parameters_out,path_wfde5,outdir,startyear,endyear,lat_all_global,lon_all_global,res,global_mask,parallel_cpus)
 
 units_out=[];
 parameters_wfde5=[];
+
+delete(gcp('nocreate'));
+parpool('Processes',parallel_cpus);
 
 if(find(contains(parameters_out,'tas','IgnoreCase',true)>=1))
   units_out=[units_out,{'K'}];
@@ -37,40 +40,40 @@ end
 
 nyears=endyear-startyear+1;
 
-load('wfde5_mask.mat');
+yy=size(global_mask,1);
+xx=size(global_mask,2);
 
 %local solar time
-res=0.5;
 lst_offset=local_solar_time(res);
-lst_offset=repmat(lst_offset,[360,1]);
+lst_offset=repmat(lst_offset,[yy,1]);
 
 %calculate local midnight in utc
 midnight=lst_offset(1:300,:)*(-1)+1;
 midnight(midnight<=0)=midnight(midnight<=0)+24;
-midnight_lst=ones(300,720); %set 0am in local solar time
+midnight_lst=ones(yy,xx); %set 0am in local solar time
 
 for parameterloop=1:length(parameters_out)
   parameter_wfde5=parameters_wfde5{parameterloop};
   parameter_out=parameters_out{parameterloop};
   unit_out=units_out{parameterloop};
   
-  factor=NaN(300,720,24,366);
-  amp_prctle=NaN(300,720,4,366,'single');
-  dailyval=NaN(300,720,nyears,366,'single');
+  factor=NaN(yy,xx,24,366);
+  amp_prctle=NaN(yy,xx,4,366,'single');
+  dailyval=NaN(yy,xx,nyears,366,'single');
   if(strcmpi(parameter_out,'tas')==1)
-    dailyval_min=NaN(300,720,nyears,366,'single');
-    dailyval_max=NaN(300,720,nyears,366,'single');
+    dailyval_min=NaN(yy,xx,nyears,366,'single');
+    dailyval_max=NaN(yy,xx,nyears,366,'single');
   end
   
   for doy=1:366
     disp(['DOY: ',num2str(doy)]);
-    data_wfde5=NaN(360,720,24,nyears);
+    data_wfde5=NaN(yy,xx,24,nyears);
     if(strcmpi(parameter_out,'pr')==1)
-      data_wfde5_snowf=NaN(360,720,24);
+      data_wfde5_snowf=NaN(yy,xx,24);
     end
     if(strcmpi(parameter_out,'hurs')==1)
-      data_wfde5_t=NaN(360,720,24,nyears);
-      data_wfde5_p=NaN(360,720,24,nyears);
+      data_wfde5_t=NaN(yy,xx,24,nyears);
+      data_wfde5_p=NaN(yy,xx,24,nyears);
     end
     
     n=1;
@@ -84,8 +87,8 @@ for parameterloop=1:length(parameters_out)
         continue
       end
       
-      data=NaN(360,720,24);
-      data_compound=NaN(360,720,48);
+      data=NaN(yy,xx,24);
+      data_compound=NaN(yy,xx,48);
       
       cdir=[path_wfde5,filesep,parameter_wfde5,filesep];
       filelist = dir([cdir,'*_',num2str(year),num2str(Month,'%.2i'),'*.nc']);
@@ -149,8 +152,8 @@ for parameterloop=1:length(parameters_out)
       else
         data_compound(:,:,37:48)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band+24],[x y 12]));
       end
-      for y=1:360
-        for x=1:720
+      for y=1:yy
+        for x=1:xx
           for t=1:24
             data(y,x,t)=data_compound(y,x,t+12-lst_offset(y,x));
           end
@@ -177,8 +180,8 @@ for parameterloop=1:length(parameters_out)
         else
           data_compound(:,:,37:48)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band+24],[x y 12]));
         end
-        for y=1:360
-          for x=1:720
+        for y=1:yy
+          for x=1:xx
             for t=1:24
               data(y,x,t)=data_compound(y,x,t+12-lst_offset(y,x));
             end
@@ -206,8 +209,8 @@ for parameterloop=1:length(parameters_out)
         else
           data_compound(:,:,37:48)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band+24],[x y 12]));
         end
-        for y=1:360
-          for x=1:720
+        for y=1:yy
+          for x=1:xx
             for t=1:24
               data(y,x,t)=data_compound(y,x,t+12-lst_offset(y,x));
             end
@@ -233,8 +236,8 @@ for parameterloop=1:length(parameters_out)
         else
           data_compound(:,:,37:48)=rot90(ncread([cdir,filename,'.nc'],varname,[1 1 band+24],[x y 12]));
         end
-        for y=1:360
-          for x=1:720
+        for y=1:yy
+          for x=1:xx
             for t=1:24
               data(y,x,t)=data_compound(y,x,t+12-lst_offset(y,x));
             end
@@ -285,13 +288,13 @@ for parameterloop=1:length(parameters_out)
     
     %calculate daily mean/sum values for climate analogue fingerprint method
     if(strcmpi(parameter_out,'pr')==1)
-      dailyval(:,:,:,doy)=squeeze(sum(data_wfde5(1:300,:,:,:),3,'omitnan'));
+      dailyval(:,:,:,doy)=squeeze(sum(data_wfde5(:,:,:,:),3,'omitnan'));
     elseif(strcmpi(parameter_out,'tas')==1)
-      dailyval(:,:,:,doy)=squeeze(mean(data_wfde5(1:300,:,:,:),3,'omitnan'));
-      dailyval_min(:,:,:,doy)=squeeze(min(data_wfde5(1:300,:,:,:),[],3,'omitnan'));
-      dailyval_max(:,:,:,doy)=squeeze(max(data_wfde5(1:300,:,:,:),[],3,'omitnan'));
+      dailyval(:,:,:,doy)=squeeze(mean(data_wfde5(:,:,:,:),3,'omitnan'));
+      dailyval_min(:,:,:,doy)=squeeze(min(data_wfde5(:,:,:,:),[],3,'omitnan'));
+      dailyval_max(:,:,:,doy)=squeeze(max(data_wfde5(:,:,:,:),[],3,'omitnan'));
     else
-      dailyval(:,:,:,doy)=squeeze(mean(data_wfde5(1:300,:,:,:),3,'omitnan'));
+      dailyval(:,:,:,doy)=squeeze(mean(data_wfde5(:,:,:,:),3,'omitnan'));
     end
     
     clear('data_wfde5','data','data_compound','data_wfde5_snowf','data_wfde5_t','data_wfde5_p');
@@ -304,7 +307,7 @@ for parameterloop=1:length(parameters_out)
   
   %write daily sum/mean
   load('lat');
-  lat(301:360)=[];
+  lat_all_global(301:360)=[];
   load('lon');
   timestamps=1:366;
   var_name='mean';
@@ -319,7 +322,7 @@ for parameterloop=1:length(parameters_out)
     unit_ncdf=[unit_out];
     filename=[outdir,filesep,parameter_out,'_WFDE5_sum_doy_',num2str(startyear),'-',num2str(endyear)];
   end
-  write_netcdf_dailyval(dailyval,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
+  write_netcdf_dailyval(dailyval,lat_all_global,lon_all_global,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
   clear('dailyval');
   
   %write daily max/min for tas
@@ -328,12 +331,12 @@ for parameterloop=1:length(parameters_out)
     var_name_long='daily min value';
     unit_ncdf=[unit_out];
     filename=[outdir,filesep,parameter_out,'_WFDE5_min_doy_',num2str(startyear),'-',num2str(endyear)];
-    write_netcdf_dailyval(dailyval_min,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
+    write_netcdf_dailyval(dailyval_min,lat_all_global,lon_all_global,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
     var_name='max';
     var_name_long='daily max value';
     unit_ncdf=[unit_out];
     filename=[outdir,filesep,parameter_out,'_WFDE5_max_doy_',num2str(startyear),'-',num2str(endyear)];
-    write_netcdf_dailyval(dailyval_max,lat,lon,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
+    write_netcdf_dailyval(dailyval_max,lat_all_global,lon_all_global,timestamps,var_name,var_name_long,unit_ncdf,time_unit,filename,comment); %save as netcdf
     clear('dailyval_min','dailyval_max');
   end
   
