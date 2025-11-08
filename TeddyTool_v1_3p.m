@@ -107,7 +107,7 @@ parameters_isimip_read={'tas','hurs','rsds','rlds','ps','sfcwind','pr','tasmax',
 parameters_wfde5_factors={'tas','hurs','rsds','rlds','ps','sfcwind','pr'};
 parameters_wfde5={'Tair','Qair','SWdown','LWdown','PSurf','Wind','Rainf'};
 
-var_names_long={'air temperature','humidity','showrtwave radiation','longwave radiation','air pressure','wind speed','precipitation'};
+var_names_long={'air temperature','humidity','shortwave radiation','longwave radiation','air pressure','wind speed','precipitation'};
 units={'K','%','W m-2','W m-2','hPa','ms-1',['mm per ',num2str(htimestep),' hour']};
 
 for scenarioloop=1:length(scenarios)
