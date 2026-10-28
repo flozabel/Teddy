@@ -360,7 +360,7 @@ for scenarioloop=1:length(scenarios)
           ncid = netcdf.open([filename_wfde5_mean],'NOWRITE');
           %data=ncread([filename_wfde5_mean],vname,[1 1 1 1],[720 300 years_wfde5 366]); %changed FZ 07.10.2025
           tilesizen=size(lat_,2);
-          tileoffsetn=(90-lat_(1)+resolution/2)*(1/resolution); %lat_ -> central coordinates
+          tileoffsetn=(90-lat_(1)-resolution/2)*(1/resolution); %lat_ -> central coordinates
           data=ncread([filename_wfde5_mean],vname,[1 tileoffsetn+1 1 1],[720 tilesizen years_wfde5 366]);
           netcdf.close(ncid);
           for xloop=1:length(xcol)
