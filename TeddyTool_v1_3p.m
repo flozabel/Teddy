@@ -680,7 +680,7 @@ for scenarioloop=1:length(scenarios)
                     %coefficients=coeffvalues(myfit);
                     %plot(myfit,wfde5_pr_ds,wfde5_pr_dh);
                     coefficients=polyfit(wfde5_pr_ds, wfde5_pr_dh,1); %FZ changed 19.09.2024
-                    precip_duration=max(1,min(24,round(coefficients(1)*data_cm(tloop,xloop,vloop)+coefficients(2))));
+                    precip_duration=min(24,round(coefficients(1)*data_cm(tloop,xloop,vloop)+coefficients(2)));
                     nighttime=find(potRad==0);
                     if(precip_duration<length(nighttime))
                       random_nighttime=sort(randsample(nighttime,precip_duration));  %randomly select hours
@@ -713,7 +713,7 @@ for scenarioloop=1:length(scenarios)
                   if(isempty(nighttime))
                     wfde5_day(midnight)=1; %set factor to 1 at local midnight
                   else
-                    random_nighttime=nighttime(randi(numel(nighttime)));  %randomly select one hour
+                    random_nighttime=randsample(nighttime,1);  %randomly select one hour
                     wfde5_day(random_nighttime)=1;
                   end
                   factor=wfde5_day./sum(wfde5_day);
